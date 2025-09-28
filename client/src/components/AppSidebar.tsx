@@ -8,18 +8,10 @@ import {
   Building2
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarHeader
-} from "@/components/ui/sidebar";
-import companyLogo from '@assets/generated_images/Company_logo_placeholder_ad5bb1b0.png';
+import React from "react";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
+import { LogOut } from "lucide-react";
 
 const menuItems = [
   {
@@ -54,59 +46,63 @@ const menuItems = [
   }
 ];
 
-export function AppSidebar() {
+function NavMain() {
   const [location] = useLocation();
+  
+  return (
+    <nav className="grid gap-1 px-2 py-4">
+      {menuItems.map((item) => {
+        const Icon = item.icon;
+        const isActive = location === item.url;
+        
+        return (
+          <Link
+            key={item.url}
+            href={item.url}
+            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+              isActive
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {item.title}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function AppSidebar() {
+  const { user, logout } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
 
   return (
-    <Sidebar>
-      <SidebarHeader className="p-4">
-        <div className="flex items-center gap-3">
-          <img src={companyLogo} alt="Company Logo" className="w-8 h-8 rounded" />
-          <div>
-            <h2 className="font-semibold text-lg">ShiftManager</h2>
-            <p className="text-xs text-muted-foreground">ООО "Техком"</p>
+    <div className="flex h-full flex-col border-r bg-background">
+      <div className="flex h-16 items-center border-b px-4">
+        <h1 className="text-lg font-semibold">outTime</h1>
+      </div>
+      <div className="flex-1 overflow-auto">
+        <NavMain />
+      </div>
+      {user && (
+        <div className="border-t p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">{user.email}</span>
+            <Button variant="ghost" size="sm" onClick={handleLogout}>
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
         </div>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Управление</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton 
-                    asChild 
-                    isActive={location === item.url}
-                    data-testid={`nav-${item.title.toLowerCase()}`}
-                  >
-                    <Link href={item.url}>
-                      <item.icon className="w-4 h-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        
-        <SidebarGroup>
-          <SidebarGroupLabel>Компания</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild data-testid="nav-company-settings">
-                  <Link href="/company">
-                    <Building2 className="w-4 h-4" />
-                    <span>Настройки компании</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-    </Sidebar>
+      )}
+    </div>
   );
 }

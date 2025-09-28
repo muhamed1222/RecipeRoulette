@@ -1,10 +1,26 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createClient, Session, User as SupabaseUser } from '@supabase/supabase-js';
 
+// Check environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+console.log('Environment variables:');
+console.log('VITE_SUPABASE_URL:', supabaseUrl);
+console.log('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? `${supabaseAnonKey.substring(0, 10)}...` : 'Not set');
+
+if (!supabaseUrl) {
+  console.error('Missing VITE_SUPABASE_URL environment variable');
+}
+
+if (!supabaseAnonKey) {
+  console.error('Missing VITE_SUPABASE_ANON_KEY environment variable');
+}
+
 // Create Supabase client
 const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL || '',
-  import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+  supabaseUrl || '',
+  supabaseAnonKey || ''
 );
 
 // Define types
@@ -108,6 +124,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signup = async (email: string, password: string, companyName: string) => {
     setLoading(true);
     try {
+      console.log('Attempting to register user:', { email, companyName });
+      
+      // Check if we have the required environment variables
+      if (!supabaseUrl || !supabaseAnonKey) {
+        throw new Error('Missing Supabase configuration. Please check your environment variables.');
+      }
+      
+      // Log the request details
+      console.log('Making request to /functions/v1/admin/register');
+      console.log('Current window location:', window.location.href);
+      
       const response = await fetch('/functions/v1/admin/register', {
         method: 'POST',
         headers: {
@@ -116,17 +143,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password, companyName })
       });
 
+      console.log('Registration response status:', response.status);
+      // Convert headers to object for logging
+      const headersObj: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        headersObj[key] = value;
+      });
+      console.log('Registration response headers:', headersObj);
+      
       const result = await response.json();
+      console.log('Registration response data:', result);
 
       if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Не удалось зарегистрироваться');
+        const errorMessage = result.error || 'Не удалось зарегистрироваться';
+        console.error('Registration failed:', errorMessage);
+        throw new Error(errorMessage);
       }
 
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
+        console.error('Sign in after registration failed:', error);
         throw error;
       }
     } catch (error) {
+      console.error('Registration error:', error);
       throw error;
     } finally {
       setLoading(false);

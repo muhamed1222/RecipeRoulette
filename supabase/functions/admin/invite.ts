@@ -138,6 +138,8 @@ async function registerAdmin(payload: RegisterRequest): Promise<RegisterResult> 
   const password = payload.password;
   const companyName = payload.companyName?.trim();
 
+  console.log('Registering admin with payload:', { email, companyName });
+
   if (!email || !password || !companyName) {
     throw new RegisterError("email, password and companyName are required", 400);
   }
@@ -146,9 +148,11 @@ async function registerAdmin(payload: RegisterRequest): Promise<RegisterResult> 
 
   const { data: existingUser } = await client.auth.admin.getUserByEmail(email);
   if (existingUser) {
+    console.log('User already exists:', existingUser);
     throw new RegisterError("Пользователь с таким email уже существует", 409);
   }
 
+  console.log('Creating auth user...');
   const { data: createdUser, error: createUserError } = await client.auth.admin.createUser({
     email,
     password,
@@ -160,6 +164,9 @@ async function registerAdmin(payload: RegisterRequest): Promise<RegisterResult> 
     throw new RegisterError("Не удалось создать пользователя", 500);
   }
 
+  console.log('Created auth user:', createdUser.user.id);
+
+  console.log('Creating company...');
   const { data: company, error: companyError } = await client
     .from("company")
     .insert({ name: companyName })
@@ -171,6 +178,9 @@ async function registerAdmin(payload: RegisterRequest): Promise<RegisterResult> 
     throw new RegisterError("Не удалось создать компанию", 500);
   }
 
+  console.log('Created company:', company.id);
+
+  console.log('Creating admin user...');
   const { error: adminInsertError } = await client
     .from("admin_user")
     .insert({
@@ -184,6 +194,7 @@ async function registerAdmin(payload: RegisterRequest): Promise<RegisterResult> 
     throw new RegisterError("Не удалось завершить регистрацию", 500);
   }
 
+  console.log('Registration completed successfully');
   return {
     userId: createdUser.user.id,
     companyId: company.id

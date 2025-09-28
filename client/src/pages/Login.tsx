@@ -114,7 +114,7 @@ export default function Login() {
               <button
                 type="button"
                 onClick={toggleMode}
-                className="font-medium text-primary hover:underline"
+                className="font-medium text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded px-1"
               >
                 {mode === 'login' ? 'Зарегистрироваться' : 'Войти'}
               </button>
