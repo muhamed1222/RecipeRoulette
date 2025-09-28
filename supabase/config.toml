@@ -1,0 +1,13 @@
+# Supabase CLI configuration
+
+[functions.tg]
+verify_jwt = false
+
+[functions.webapp]
+verify_jwt = false
+
+[functions.scheduler]
+verify_jwt = false
+
+[functions.admin]
+verify_jwt = true

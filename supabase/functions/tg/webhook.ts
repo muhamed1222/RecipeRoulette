@@ -1,0 +1,433 @@
+// Telegram Webhook Handler
+// POST /tg/webhook
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { Telegraf } from "https://esm.sh/telegraf@4.15.0";
+
+// Initialize Supabase client with service role key for full access
+const supabase = createClient(
+  Deno.env.get("SUPABASE_URL") ?? "",
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+);
+
+// Initialize Telegraf bot
+const bot = new Telegraf(Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "");
+
+// Handle callback queries
+bot.action(/^start$/, async (ctx) => {
+  try {
+    const userId = ctx.from?.id.toString();
+    if (!userId) {
+      await ctx.reply("Ошибка идентификации пользователя");
+      return;
+    }
+
+    // Find employee by telegram_user_id
+    const { data: employee, error } = await supabase
+      .from("employee")
+      .select("*")
+      .eq("telegram_user_id", userId)
+      .single();
+
+    if (error || !employee) {
+      await ctx.reply("Сотрудник не найден. Обратитесь к администратору.");
+      return;
+    }
+
+    // Create or activate shift
+    const now = new Date();
+    const { data: shift, error: shiftError } = await supabase
+      .from("shift")
+      .insert({
+        employee_id: employee.id,
+        planned_start_at: now,
+        planned_end_at: new Date(now.getTime() + 8 * 60 * 60 * 1000), // Default 8 hours
+        status: "active"
+      })
+      .select()
+      .single();
+
+    if (shiftError) {
+      console.error("Error creating shift:", shiftError);
+      await ctx.reply("Ошибка при создании смены");
+      return;
+    }
+
+    // Create work interval
+    const { error: intervalError } = await supabase
+      .from("work_interval")
+      .insert({
+        shift_id: shift.id,
+        start_at: now,
+        source: "bot"
+      });
+
+    if (intervalError) {
+      console.error("Error creating work interval:", intervalError);
+      await ctx.reply("Ошибка при создании рабочего интервала");
+      return;
+    }
+
+    // Log audit
+    await supabase.from("audit_log").insert({
+      actor: `tg:${userId}`,
+      action: "start_shift",
+      entity: `shift:${shift.id}`,
+      payload: { shift_id: shift.id }
+    });
+
+    await ctx.reply("Смена начата! Удачного дня!");
+  } catch (error) {
+    console.error("Error in start action:", error);
+    await ctx.reply("Произошла ошибка. Попробуйте еще раз.");
+  }
+});
+
+bot.action(/^lunch_start$/, async (ctx) => {
+  try {
+    const userId = ctx.from?.id.toString();
+    if (!userId) {
+      await ctx.reply("Ошибка идентификации пользователя");
+      return;
+    }
+
+    // Find employee by telegram_user_id
+    const { data: employee, error } = await supabase
+      .from("employee")
+      .select("*")
+      .eq("telegram_user_id", userId)
+      .single();
+
+    if (error || !employee) {
+      await ctx.reply("Сотрудник не найден. Обратитесь к администратору.");
+      return;
+    }
+
+    // Find active shift
+    const { data: shift, error: shiftError } = await supabase
+      .from("shift")
+      .select("*")
+      .eq("employee_id", employee.id)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (shiftError || !shift) {
+      await ctx.reply("Активная смена не найдена");
+      return;
+    }
+
+    // Close current work interval
+    const now = new Date();
+    const { error: updateError } = await supabase
+      .from("work_interval")
+      .update({ end_at: now })
+      .eq("shift_id", shift.id)
+      .is("end_at", null);
+
+    if (updateError) {
+      console.error("Error closing work interval:", updateError);
+      await ctx.reply("Ошибка при завершении рабочего интервала");
+      return;
+    }
+
+    // Create break interval
+    const { error: breakError } = await supabase
+      .from("break_interval")
+      .insert({
+        shift_id: shift.id,
+        start_at: now,
+        type: "lunch",
+        source: "bot"
+      });
+
+    if (breakError) {
+      console.error("Error creating break interval:", breakError);
+      await ctx.reply("Ошибка при создании перерыва");
+      return;
+    }
+
+    // Log audit
+    await supabase.from("audit_log").insert({
+      actor: `tg:${userId}`,
+      action: "start_lunch",
+      entity: `shift:${shift.id}`,
+      payload: { shift_id: shift.id }
+    });
+
+    await ctx.reply("Приятного аппетита! Перерыв начат.");
+  } catch (error) {
+    console.error("Error in lunch_start action:", error);
+    await ctx.reply("Произошла ошибка. Попробуйте еще раз.");
+  }
+});
+
+bot.action(/^lunch_end$/, async (ctx) => {
+  try {
+    const userId = ctx.from?.id.toString();
+    if (!userId) {
+      await ctx.reply("Ошибка идентификации пользователя");
+      return;
+    }
+
+    // Find employee by telegram_user_id
+    const { data: employee, error } = await supabase
+      .from("employee")
+      .select("*")
+      .eq("telegram_user_id", userId)
+      .single();
+
+    if (error || !employee) {
+      await ctx.reply("Сотрудник не найден. Обратитесь к администратору.");
+      return;
+    }
+
+    // Find active shift
+    const { data: shift, error: shiftError } = await supabase
+      .from("shift")
+      .select("*")
+      .eq("employee_id", employee.id)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (shiftError || !shift) {
+      await ctx.reply("Активная смена не найдена");
+      return;
+    }
+
+    // Close current break interval
+    const now = new Date();
+    const { error: updateError } = await supabase
+      .from("break_interval")
+      .update({ end_at: now })
+      .eq("shift_id", shift.id)
+      .is("end_at", null)
+      .eq("type", "lunch");
+
+    if (updateError) {
+      console.error("Error closing break interval:", updateError);
+      await ctx.reply("Ошибка при завершении перерыва");
+      return;
+    }
+
+    // Create new work interval
+    const { error: intervalError } = await supabase
+      .from("work_interval")
+      .insert({
+        shift_id: shift.id,
+        start_at: now,
+        source: "bot"
+      });
+
+    if (intervalError) {
+      console.error("Error creating work interval:", intervalError);
+      await ctx.reply("Ошибка при создании рабочего интервала");
+      return;
+    }
+
+    // Log audit
+    await supabase.from("audit_log").insert({
+      actor: `tg:${userId}`,
+      action: "end_lunch",
+      entity: `shift:${shift.id}`,
+      payload: { shift_id: shift.id }
+    });
+
+    await ctx.reply("Отлично! Возвращаемся к работе.");
+  } catch (error) {
+    console.error("Error in lunch_end action:", error);
+    await ctx.reply("Произошла ошибка. Попробуйте еще раз.");
+  }
+});
+
+bot.action(/^finish$/, async (ctx) => {
+  try {
+    const userId = ctx.from?.id.toString();
+    if (!userId) {
+      await ctx.reply("Ошибка идентификации пользователя");
+      return;
+    }
+
+    // Find employee by telegram_user_id
+    const { data: employee, error } = await supabase
+      .from("employee")
+      .select("*")
+      .eq("telegram_user_id", userId)
+      .single();
+
+    if (error || !employee) {
+      await ctx.reply("Сотрудник не найден. Обратитесь к администратору.");
+      return;
+    }
+
+    // Find active shift
+    const { data: shift, error: shiftError } = await supabase
+      .from("shift")
+      .select("*")
+      .eq("employee_id", employee.id)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (shiftError || !shift) {
+      await ctx.reply("Активная смена не найдена");
+      return;
+    }
+
+    // Close current work interval
+    const now = new Date();
+    const { error: updateError } = await supabase
+      .from("work_interval")
+      .update({ end_at: now })
+      .eq("shift_id", shift.id)
+      .is("end_at", null);
+
+    if (updateError) {
+      console.error("Error closing work interval:", updateError);
+      await ctx.reply("Ошибка при завершении рабочего интервала");
+      return;
+    }
+
+    // Update shift status to done
+    const { error: shiftUpdateError } = await supabase
+      .from("shift")
+      .update({ status: "done", planned_end_at: now })
+      .eq("id", shift.id);
+
+    if (shiftUpdateError) {
+      console.error("Error updating shift:", shiftUpdateError);
+      await ctx.reply("Ошибка при завершении смены");
+      return;
+    }
+
+    // Log audit
+    await supabase.from("audit_log").insert({
+      actor: `tg:${userId}`,
+      action: "finish_shift",
+      entity: `shift:${shift.id}`,
+      payload: { shift_id: shift.id }
+    });
+
+    await ctx.reply("Смена завершена! Спасибо за работу!");
+  } catch (error) {
+    console.error("Error in finish action:", error);
+    await ctx.reply("Произошла ошибка. Попробуйте еще раз.");
+  }
+});
+
+// Handle status changes
+bot.action(/status:(.+)$/, async (ctx) => {
+  try {
+    const status = ctx.match?.[1];
+    const userId = ctx.from?.id.toString();
+    
+    if (!userId || !status) {
+      await ctx.reply("Ошибка идентификации");
+      return;
+    }
+
+    // Update employee status
+    const { error } = await supabase
+      .from("employee")
+      .update({ status: status })
+      .eq("telegram_user_id", userId);
+
+    if (error) {
+      console.error("Error updating employee status:", error);
+      await ctx.reply("Ошибка при обновлении статуса");
+      return;
+    }
+
+    const statusText = {
+      vacation: "Отпуск",
+      sick: "Больничный",
+      trip: "Командировка",
+      dayoff: "Выходной"
+    }[status] || status;
+
+    await ctx.reply(`Статус обновлен: ${statusText}`);
+  } catch (error) {
+    console.error("Error in status action:", error);
+    await ctx.reply("Произошла ошибка. Попробуйте еще раз.");
+  }
+});
+
+// Handle commands
+bot.command("start", async (ctx) => {
+  await ctx.reply("Добро пожаловать в outTime! Используйте кнопки для управления сменами.", {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "Начать смену", callback_data: "start" },
+          { text: "Перерыв", callback_data: "lunch_start" }
+        ],
+        [
+          { text: "Завершить смену", callback_data: "finish" }
+        ],
+        [
+          { text: "Отпуск", callback_data: "status:vacation" },
+          { text: "Больничный", callback_data: "status:sick" }
+        ],
+        [
+          { text: "Командировка", callback_data: "status:trip" },
+          { text: "Выходной", callback_data: "status:dayoff" }
+        ]
+      ]
+    }
+  });
+});
+
+bot.command("help", async (ctx) => {
+  await ctx.reply(
+    "Команды бота:\n" +
+    "/start - Главное меню\n" +
+    "/help - Помощь\n" +
+    "/status - Меню статусов\n\n" +
+    "Используйте кнопки для управления сменами и установки статусов."
+  );
+});
+
+bot.command("status", async (ctx) => {
+  await ctx.reply("Выберите статус:", {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "Отпуск", callback_data: "status:vacation" },
+          { text: "Больничный", callback_data: "status:sick" }
+        ],
+        [
+          { text: "Командировка", callback_data: "status:trip" },
+          { text: "Выходной", callback_data: "status:dayoff" }
+        ]
+      ]
+    }
+  });
+});
+
+// Webhook handler
+serve(async (req) => {
+  try {
+    // Verify webhook request
+    if (req.method === "POST") {
+      // Let Telegraf handle the update
+      await bot.handleUpdate(await req.json());
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response("Method not allowed", { status: 405 });
+  } catch (error) {
+    console.error("Error in webhook handler:", error);
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+});
