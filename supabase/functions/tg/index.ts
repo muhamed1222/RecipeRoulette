@@ -30,12 +30,6 @@ bot.use(session<SessionData>({
   defaultSession: () => ({}),
 }));
 
-// Add middleware to log all updates (for debugging)
-bot.use((ctx, next) => {
-  console.log('TG_UPDATE', JSON.stringify(ctx.update, null, 2));
-  return next();
-});
-
 // Handle callback queries
 bot.action(/^start_shift$/, async (ctx) => {
   try {
@@ -393,7 +387,8 @@ bot.on("text", async (ctx, next) => {
 bot.command("start", async (ctx) => {
   try {
     const userId = ctx.from?.id.toString();
-    const payload = ctx.startPayload;
+    const textPayload = ctx.message?.text?.split(" ")[1] ?? undefined;
+    const payload = ctx.startPayload ?? textPayload;
     console.log("TG_START", { userId, payload });
 
     if (payload && userId) {
@@ -416,37 +411,59 @@ bot.command("start", async (ctx) => {
           .maybeSingle();
 
         if (!employeeError) {
+          let employeeId = existingEmployee?.id;
+
           if (existingEmployee) {
             console.log("Existing employee found, updating:", existingEmployee.id);
             // Update existing employee
-            await supabase
+            const { error: updateEmployeeError } = await supabase
               .from("employee")
               .update({
                 company_id: invite.company_id,
                 status: "active"
               })
               .eq("id", existingEmployee.id);
+
+            if (updateEmployeeError) {
+              console.error("Error updating existing employee:", updateEmployeeError);
+              await ctx.reply("Не удалось обновить данные сотрудника. Попробуйте позже.");
+              return;
+            }
           } else {
             console.log("Creating new employee for user:", userId);
             // Create new employee
-            await supabase
+            const { data: newEmployee, error: createEmployeeError } = await supabase
               .from("employee")
               .insert({
                 telegram_user_id: userId,
                 company_id: invite.company_id,
                 full_name: ctx.from?.first_name || "Unknown",
                 status: "active"
-              });
+              })
+              .select("id")
+              .single();
+
+            if (createEmployeeError || !newEmployee) {
+              console.error("Error creating new employee:", createEmployeeError);
+              await ctx.reply("Не удалось создать профиль сотрудника. Попробуйте позже.");
+              return;
+            }
+
+            employeeId = newEmployee.id;
           }
 
           // Mark invite as used
-          await supabase
+          const { error: markInviteError } = await supabase
             .from("employee_invite")
             .update({
-              used_by_employee: existingEmployee?.id || null,
+              used_by_employee: employeeId,
               used_at: new Date().toISOString()
             })
             .eq("id", invite.id);
+
+          if (markInviteError) {
+            console.error("Error marking invite as used:", markInviteError);
+          }
 
           await ctx.reply("✅ Вы успешно присоединились к компании.\nС завтрашнего дня вы будете получать уведомления о начале смены.");
           return;

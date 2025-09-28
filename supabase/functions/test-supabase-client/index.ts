@@ -1,15 +1,24 @@
-// Simple test function to check if Supabase functions are working
+// Test function to check Supabase client initialization
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { getServiceClient } from "../_shared/supabase.ts";
 
-console.log("TEST_FUNCTION_INIT");
+console.log("TEST_SUPABASE_CLIENT_INIT");
+
+try {
+  console.log("Attempting to initialize Supabase client...");
+  const supabase = getServiceClient();
+  console.log("Supabase client initialized successfully");
+} catch (error) {
+  console.error("Error initializing Supabase client:", error);
+}
 
 serve(async (_req) => {
   try {
-    console.log("Test function called");
+    console.log("Test supabase client function called");
     return new Response(
       JSON.stringify({ 
         ok: true, 
-        message: "Test function working correctly" 
+        message: "Test function working" 
       }),
       {
         status: 200,
