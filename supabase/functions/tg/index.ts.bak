@@ -1,9 +1,11 @@
 // Telegram Webhook Handler
-// POST /tg/webhook
+// POST /functions/v1/tg
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { Telegraf } from "https://esm.sh/telegraf@4.15.0";
 import { getServiceClient } from "../_shared/supabase.ts";
+
+console.log("TG_FUNCTION_INIT");
 
 // Initialize Supabase client with service role key for full access
 const supabase = getServiceClient();
@@ -356,27 +358,78 @@ bot.action(/status:(.+)$/, async (ctx) => {
 
 // Handle commands
 bot.command("start", async (ctx) => {
-  await ctx.reply("Добро пожаловать в outTime! Используйте кнопки для управления сменами.", {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: "Начать смену", callback_data: "start" },
-          { text: "Перерыв", callback_data: "lunch_start" }
-        ],
-        [
-          { text: "Завершить смену", callback_data: "finish" }
-        ],
-        [
-          { text: "Отпуск", callback_data: "status:vacation" },
-          { text: "Больничный", callback_data: "status:sick" }
-        ],
-        [
-          { text: "Командировка", callback_data: "status:trip" },
-          { text: "Выходной", callback_data: "status:dayoff" }
-        ]
-      ]
+  try {
+    const userId = ctx.from?.id.toString();
+    const payload = ctx.startPayload;
+    console.log("TG_START", { userId, payload });
+
+    if (payload && userId) {
+      const { data: invite, error: inviteError } = await supabase
+        .from("employee_invite")
+        .select("id, company_id")
+        .eq("code", payload)
+        .is("used_at", null)
+        .maybeSingle();
+
+      if (!inviteError && invite) {
+        const { data: existingEmployee } = await supabase
+          .from("employee")
+          .select("id")
+          .eq("telegram_user_id", userId)
+          .maybeSingle();
+
+        if (existingEmployee) {
+          await supabase
+            .from("employee")
+            .update({
+              company_id: invite.company_id,
+              status: "active"
+            })
+            .eq("id", existingEmployee.id);
+        }
+
+        await supabase
+          .from("employee_invite")
+          .update({
+            used_by_employee: existingEmployee?.id ?? null,
+            used_at: new Date().toISOString()
+          })
+          .eq("id", invite.id);
+
+        // Send welcome message after invite acceptance
+        await ctx.reply("Приглашение принято. Добро пожаловать!");
+      }
     }
-  });
+    
+    // Send main menu
+    await ctx.reply(
+      "Добро пожаловать в outTime! Используйте кнопки для управления сменами.",
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "Начать смену", callback_data: "start" },
+              { text: "Перерыв", callback_data: "lunch_start" }
+            ],
+            [
+              { text: "Завершить смену", callback_data: "finish" }
+            ],
+            [
+              { text: "Отпуск", callback_data: "status:vacation" },
+              { text: "Больничный", callback_data: "status:sick" }
+            ],
+            [
+              { text: "Командировка", callback_data: "status:trip" },
+              { text: "Выходной", callback_data: "status:dayoff" }
+            ]
+          ]
+        }
+      }
+    );
+  } catch (error) {
+    console.error("Error handling /start:", error);
+    await ctx.reply("Произошла ошибка при обработке команды /start. Попробуйте позже.");
+  }
 });
 
 bot.command("help", async (ctx) => {

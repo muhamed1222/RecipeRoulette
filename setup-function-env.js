@@ -1,47 +1,39 @@
+// Script to set up environment variables for Supabase functions
 import dotenv from 'dotenv';
-import fs from 'fs';
 
 // Load environment variables
 dotenv.config();
 
-console.log('🔧 Setting up environment variables for Edge Functions');
-console.log('');
-
-// Get the required environment variables
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '7702024149:AAEwYiA7qqhWkKIDpC-OQrfiHclX-sJ6gC4';
-const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || '@outtimeagency_bot';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME;
 const TZ_DEFAULT = process.env.TZ_DEFAULT || 'Europe/Amsterdam';
 
-console.log('Required environment variables:');
-console.log(`  SUPABASE_URL: ${SUPABASE_URL}`);
-console.log(`  SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY ? '[SET]' : '[NOT SET]'}`);
-console.log(`  TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}`);
-console.log(`  TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}`);
-console.log(`  TZ_DEFAULT: ${TZ_DEFAULT}`);
-console.log('');
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('❌ Missing required Supabase credentials!');
-  console.error('Please make sure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set in your .env file.');
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !TELEGRAM_BOT_TOKEN || !TELEGRAM_BOT_USERNAME) {
+  console.error('Missing required environment variables. Please check your .env file.');
+  console.error('Required: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME');
   process.exit(1);
 }
 
-console.log('📋 Instructions for setting up environment variables in Supabase:');
-console.log('');
-console.log('1. Go to your Supabase project dashboard');
-console.log('2. Navigate to "Functions" in the left sidebar');
-console.log('3. For each function (tg, webapp, scheduler, admin):');
-console.log('   a. Click on the function name');
-console.log('   b. Go to the "Settings" tab');
-console.log('   c. Add the following environment variables:');
-console.log(`      - SUPABASE_URL: ${SUPABASE_URL}`);
-console.log(`      - SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}`);
-console.log(`      - TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}`);
-console.log(`      - TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}`);
-console.log(`      - TZ_DEFAULT: ${TZ_DEFAULT}`);
-console.log('');
-console.log('4. Click "Save" for each function');
-console.log('');
-console.log('✅ Environment variables setup complete!');
+console.log('Setting up environment variables for Supabase functions...');
+console.log('SUPABASE_URL:', SUPABASE_URL);
+console.log('TELEGRAM_BOT_USERNAME:', TELEGRAM_BOT_USERNAME);
+console.log('TZ_DEFAULT:', TZ_DEFAULT);
+
+// Note: In a real implementation, we would use the Supabase API to set these variables
+// For now, we're just showing what needs to be set in the Supabase dashboard
+
+console.log('\nPlease set the following environment variables in the Supabase dashboard for the tg function:');
+console.log('SUPABASE_URL:', SUPABASE_URL);
+console.log('SUPABASE_SERVICE_ROLE_KEY:', '<your_service_role_key>');
+console.log('TELEGRAM_BOT_TOKEN:', TELEGRAM_BOT_TOKEN);
+console.log('TELEGRAM_BOT_USERNAME:', TELEGRAM_BOT_USERNAME);
+console.log('TZ_DEFAULT:', TZ_DEFAULT);
+
+console.log('\nYou can set these in the Supabase dashboard by going to:');
+console.log('1. Your project');
+console.log('2. Edge Functions');
+console.log('3. Select the "tg" function');
+console.log('4. Go to Settings -> Environment Variables');
+console.log('5. Add each variable with the values shown above');
