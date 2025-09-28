@@ -6,7 +6,10 @@ echo "Setting up Telegram bot webhook..."
 
 # Load environment variables from .env file if it exists
 if [ -f .env ]; then
-  export $(cat .env | xargs)
+  # shellcheck disable=SC1091
+  set -o allexport
+  source .env
+  set +o allexport
 fi
 
 # Check if required environment variables are set
