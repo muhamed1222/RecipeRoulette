@@ -5,14 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import { getFunctionUrl } from '@/lib/functions';
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL || '',
-  import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-);
 
 interface Employee {
   id: string;
@@ -154,8 +149,11 @@ export default function Employees() {
     }
   };
 
+  const botUsername = (import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'your_bot_username').replace(/^@/, '');
+
   // Copy invite link to clipboard
-  const copyToClipboard = (link: string) => {
+  const copyToClipboard = (code: string) => {
+    const link = `https://t.me/${botUsername}?start=${code}`;
     navigator.clipboard.writeText(link).then(() => {
       toast({
         title: "Скопировано",
@@ -286,7 +284,7 @@ export default function Employees() {
                       <Button 
                         variant="outline" 
                         size="sm"
-                        onClick={() => copyToClipboard(`https://t.me/your_bot_username?start=${invite.code}`)}
+                        onClick={() => copyToClipboard(invite.code)}
                       >
                         Копировать
                       </Button>

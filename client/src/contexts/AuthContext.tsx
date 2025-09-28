@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { createClient, Session, User as SupabaseUser } from '@supabase/supabase-js';
+import { Session, User as SupabaseUser } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabaseClient';
 import { getFunctionUrl } from '@/lib/functions';
 
 // Check environment variables
@@ -17,12 +18,6 @@ if (!supabaseUrl) {
 if (!supabaseAnonKey) {
   console.error('Missing VITE_SUPABASE_ANON_KEY environment variable');
 }
-
-// Create Supabase client
-const supabase = createClient(
-  supabaseUrl || '',
-  supabaseAnonKey || ''
-);
 
 // Define types
 interface User {
