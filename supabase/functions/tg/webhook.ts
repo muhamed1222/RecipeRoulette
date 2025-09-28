@@ -2,14 +2,11 @@
 // POST /tg/webhook
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { Telegraf } from "https://esm.sh/telegraf@4.15.0";
+import { getServiceClient } from "../_shared/supabase.ts";
 
 // Initialize Supabase client with service role key for full access
-const supabase = createClient(
-  Deno.env.get("SUPABASE_URL") ?? "",
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-);
+const supabase = getServiceClient();
 
 // Initialize Telegraf bot
 const bot = new Telegraf(Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "");

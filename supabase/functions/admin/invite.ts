@@ -146,59 +146,72 @@ async function registerAdmin(payload: RegisterRequest): Promise<RegisterResult> 
 
   const client = supabase();
 
-  const { data: existingUser } = await client.auth.admin.getUserByEmail(email);
-  if (existingUser) {
-    console.log('User already exists:', existingUser);
-    throw new RegisterError("Пользователь с таким email уже существует", 409);
-  }
-
-  console.log('Creating auth user...');
-  const { data: createdUser, error: createUserError } = await client.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true
-  });
-
-  if (createUserError || !createdUser?.user) {
-    console.error("Error creating auth user:", createUserError);
-    throw new RegisterError("Не удалось создать пользователя", 500);
-  }
-
-  console.log('Created auth user:', createdUser.user.id);
-
-  console.log('Creating company...');
-  const { data: company, error: companyError } = await client
-    .from("company")
-    .insert({ name: companyName })
-    .select("id")
-    .single();
-
-  if (companyError || !company) {
-    console.error("Error creating company:", companyError);
-    throw new RegisterError("Не удалось создать компанию", 500);
-  }
-
-  console.log('Created company:', company.id);
-
-  console.log('Creating admin user...');
-  const { error: adminInsertError } = await client
-    .from("admin_user")
-    .insert({
-      id: createdUser.user.id,
-      company_id: company.id,
-      role: "owner"
+  try {
+    console.log('Creating auth user...');
+    const { data: createdUser, error: createUserError } = await client.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true
     });
 
-  if (adminInsertError) {
-    console.error("Error creating admin user:", adminInsertError);
-    throw new RegisterError("Не удалось завершить регистрацию", 500);
-  }
+    if (createUserError || !createdUser?.user) {
+      console.error("Error creating auth user:", createUserError);
+      const message = createUserError?.message ?? "Не удалось создать пользователя";
+      const normalized = message.toLowerCase();
+      if (
+        normalized.includes("already been registered") ||
+        normalized.includes("already registered") ||
+        normalized.includes("duplicate")
+      ) {
+        throw new RegisterError("Пользователь с таким email уже существует", 409);
+      }
+      throw new RegisterError(message, 500);
+    }
 
-  console.log('Registration completed successfully');
-  return {
-    userId: createdUser.user.id,
-    companyId: company.id
-  };
+    const userId = createdUser.user.id;
+    console.log('Created auth user with ID:', userId);
+
+    console.log('Creating company...');
+    const { data: company, error: companyError } = await client
+      .from("company")
+      .insert({ name: companyName })
+      .select("id")
+      .single();
+
+    console.log('Create company result:', { company, companyError });
+
+    if (companyError || !company) {
+      console.error("Error creating company:", companyError);
+      throw new RegisterError("Не удалось создать компанию", 500);
+    }
+
+    console.log('Created company:', company.id);
+
+    console.log('Creating admin user...');
+    const { error: adminInsertError } = await client
+      .from("admin_user")
+      .insert({
+        id: userId,
+        company_id: company.id,
+        role: "owner"
+      });
+
+    console.log('Create admin user result:', { adminInsertError });
+
+    if (adminInsertError) {
+      console.error("Error creating admin user:", adminInsertError);
+      throw new RegisterError("Не удалось завершить регистрацию", 500);
+    }
+
+    console.log('Registration completed successfully');
+    return {
+      userId: userId,
+      companyId: company.id
+    };
+  } catch (error) {
+    console.error("Unexpected error in registerAdmin:", error);
+    throw error;
+  }
 }
 
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
@@ -216,7 +229,18 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // Add a simple test endpoint
   const url = new URL(req.url);
+  if (url.pathname.endsWith('/test')) {
+    return new Response(JSON.stringify({ success: true, message: "Test endpoint working" }), {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        "content-type": "application/json"
+      }
+    });
+  }
+
   const pathname = url.pathname.replace(/^\/+|\/+$/g, "");
   const method = req.method.toUpperCase();
   const segments = pathname.split("/").filter(Boolean);
@@ -230,6 +254,31 @@ serve(async (req) => {
         success: true,
         info: "Admin function is live. Use /register or /invite endpoints."
       }, 200);
+    }
+
+    // Add a simple test for the register endpoint
+    if (subPath === "register" && method === "POST") {
+      console.log("Register endpoint called");
+      // For debugging, return a simple response immediately
+      // return jsonResponse({ success: true, message: "Register endpoint reached" }, 200);
+      
+      // Parse the request body
+      let body: RegisterRequest;
+      try {
+        body = (await req.json()) as RegisterRequest;
+        console.log("Request body:", body);
+      } catch (parseError) {
+        console.error("Error parsing request body:", parseError);
+        return jsonResponse({ success: false, error: "Invalid JSON in request body" }, 400);
+      }
+      
+      try {
+        const result = await registerAdmin(body);
+        return jsonResponse({ success: true, data: result }, 201);
+      } catch (error) {
+        console.error("Error in registerAdmin:", error);
+        return jsonResponse({ success: false, error: error.message || "Internal Server Error" }, 500);
+      }
     }
 
     if (subPath === "invite" && method === "POST") {
@@ -270,12 +319,6 @@ serve(async (req) => {
       });
 
       return jsonResponse({ success: true, data: result });
-    }
-
-    if (subPath === "register" && method === "POST") {
-      const body = (await req.json()) as RegisterRequest;
-      const result = await registerAdmin(body);
-      return jsonResponse({ success: true, data: result }, 201);
     }
 
     return jsonResponse({ success: false, error: "Not Found" }, 404);

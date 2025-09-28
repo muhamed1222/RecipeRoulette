@@ -8,14 +8,18 @@ export function getServiceClient(): SupabaseClient {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceRoleKey =
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
+    Deno.env.get("SERVICE_ROLE_KEY");
 
   if (!supabaseUrl) {
     throw new Error("SUPABASE_URL is not set");
   }
 
   if (!serviceRoleKey) {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY is not set");
+    throw new Error(
+      "Service role key is not set. Provide SUPABASE_SERVICE_ROLE_KEY or SERVICE_ROLE_KEY secret.",
+    );
   }
 
   cachedClient = createClient(supabaseUrl, serviceRoleKey);

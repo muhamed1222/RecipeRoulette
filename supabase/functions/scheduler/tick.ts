@@ -1,13 +1,10 @@
 // Scheduler Tick Function
 // POST /scheduler/tick (cron job every 5 minutes)
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { getServiceClient } from "../_shared/supabase.ts";
 
 // Initialize Supabase client with service role key for full access
-const supabase = createClient(
-  Deno.env.get("SUPABASE_URL") ?? "",
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-);
+const supabase = getServiceClient();
 
 // Telegram Bot API endpoint
 const TELEGRAM_API_URL = `https://api.telegram.org/bot${Deno.env.get("TELEGRAM_BOT_TOKEN")}`;
