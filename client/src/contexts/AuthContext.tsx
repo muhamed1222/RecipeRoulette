@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createClient, Session, User as SupabaseUser } from '@supabase/supabase-js';
+import { getFunctionUrl } from '@/lib/functions';
 
 // Check environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -132,14 +133,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       // Log the request details
-      console.log('Making request to /functions/v1/admin/register');
+      const registerUrl = getFunctionUrl('admin/register');
+      console.log('Making request to', registerUrl);
       console.log('Current window location:', window.location.href);
-      
-      const response = await fetch('/functions/v1/admin/register', {
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+
+      if (supabaseAnonKey) {
+        headers['apikey'] = supabaseAnonKey;
+        headers['Authorization'] = headers['Authorization'] ?? `Bearer ${supabaseAnonKey}`;
+      }
+
+      const response = await fetch(registerUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify({ email, password, companyName })
       });
 
@@ -150,12 +159,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headersObj[key] = value;
       });
       console.log('Registration response headers:', headersObj);
-      
-      const result = await response.json();
-      console.log('Registration response data:', result);
+      const contentType = response.headers.get('content-type') || '';
+      let responseData: { success: boolean; error?: string } | null = null;
 
-      if (!response.ok || !result.success) {
-        const errorMessage = result.error || 'Не удалось зарегистрироваться';
+      if (contentType.includes('application/json')) {
+        responseData = await response.json();
+        console.log('Registration response data:', responseData);
+      } else {
+        const textBody = await response.text();
+        console.log('Registration response (non-json):', textBody);
+      }
+
+      if (!responseData) {
+        throw new Error('Получен неожиданный ответ от сервера Supabase. Проверьте конфигурацию прокси.');
+      }
+
+      if (!response.ok || !responseData.success) {
+        const errorMessage = responseData.error || 'Не удалось зарегистрироваться';
         console.error('Registration failed:', errorMessage);
         throw new Error(errorMessage);
       }

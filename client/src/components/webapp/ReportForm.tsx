@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/hooks/use-toast';
+import { getFunctionUrl } from '@/lib/functions';
 
 interface ReportItem {
   id: number;
@@ -67,11 +68,20 @@ export function ReportForm() {
       };
 
       // Submit to Edge Function
-      const response = await fetch('/functions/v1/webapp/submit', {
+      const submitUrl = getFunctionUrl('webapp/submit');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      if (anonKey) {
+        headers['apikey'] = anonKey;
+        headers['Authorization'] = headers['Authorization'] ?? `Bearer ${anonKey}`;
+      }
+
+      const response = await fetch(submitUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           initData,
           type: 'report',
@@ -79,9 +89,10 @@ export function ReportForm() {
         })
       });
 
-      const result = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      const result = contentType.includes('application/json') ? await response.json() : null;
 
-      if (result.success) {
+      if (result?.success) {
         toast({
           title: "Успех",
           description: "Отчет успешно сохранен"
@@ -90,7 +101,7 @@ export function ReportForm() {
         // Close WebApp
         (window as any).Telegram?.WebApp?.close();
       } else {
-        throw new Error(result.error || 'Ошибка при сохранении отчета');
+        throw new Error(result?.error || 'Ошибка при сохранении отчета');
       }
     } catch (error) {
       console.error('Error submitting report:', error);

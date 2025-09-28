@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
+import { getFunctionUrl } from '@/lib/functions';
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL || '',
@@ -93,13 +94,25 @@ export default function Employees() {
       if (adminError) throw adminError;
       if (!adminUser) throw new Error("Администратор не найден");
 
-      // Call Edge Function to generate invite
-      const response = await fetch('/functions/v1/admin/invite', {
+      const inviteUrl = getFunctionUrl('admin/invite');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      if (anonKey) {
+        headers['apikey'] = anonKey;
+      }
+
+      const response = await fetch(inviteUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await supabase.auth.getSession().then(res => res.data.session?.access_token)}`
-        },
+        headers,
         body: JSON.stringify({
           fullName,
           position,
@@ -107,7 +120,12 @@ export default function Employees() {
         })
       });
 
-      const result = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      const result = contentType.includes('application/json') ? await response.json() : null;
+
+      if (!result) {
+        throw new Error('Не удалось обработать ответ от сервера приглашений');
+      }
 
       if (!response.ok || !result.success) {
         throw new Error(result.error || 'Ошибка при создании приглашения');

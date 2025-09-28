@@ -219,9 +219,20 @@ serve(async (req) => {
   const url = new URL(req.url);
   const pathname = url.pathname.replace(/^\/+|\/+$/g, "");
   const method = req.method.toUpperCase();
+  const segments = pathname.split("/").filter(Boolean);
+  const adminIndex = segments.lastIndexOf("admin");
+  const subPathSegments = adminIndex >= 0 ? segments.slice(adminIndex + 1) : segments;
+  const subPath = subPathSegments.join("/");
 
   try {
-    if (pathname === "invite" && method === "POST") {
+    if (!subPath) {
+      return jsonResponse({
+        success: true,
+        info: "Admin function is live. Use /register or /invite endpoints."
+      }, 200);
+    }
+
+    if (subPath === "invite" && method === "POST") {
       const authHeader = req.headers.get("authorization") ?? "";
       const tokenMatch = authHeader.match(/Bearer\s+(.*)/i);
       const accessToken = tokenMatch ? tokenMatch[1] : undefined;
@@ -261,7 +272,7 @@ serve(async (req) => {
       return jsonResponse({ success: true, data: result });
     }
 
-    if (pathname === "register" && method === "POST") {
+    if (subPath === "register" && method === "POST") {
       const body = (await req.json()) as RegisterRequest;
       const result = await registerAdmin(body);
       return jsonResponse({ success: true, data: result }, 201);
